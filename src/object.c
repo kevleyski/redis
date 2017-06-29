@@ -246,11 +246,9 @@ void freeStringObject(robj *o) {
 }
 
 void freeListObject(robj *o) {
-    switch (o->encoding) {
-    case OBJ_ENCODING_QUICKLIST:
+    if (o->encoding == OBJ_ENCODING_QUICKLIST) {
         quicklistRelease(o->ptr);
-        break;
-    default:
+    } else {
         serverPanic("Unknown list encoding type");
     }
 }
@@ -786,6 +784,14 @@ size_t objectComputeSize(robj *o, size_t sample_size) {
         } else {
             serverPanic("Unknown hash encoding");
         }
+    } else if (o->type == OBJ_MODULE) {
+        moduleValue *mv = o->ptr;
+        moduleType *mt = mv->type;
+        if (mt->mem_usage != NULL) {
+            asize = mt->mem_usage(mv->value);
+        } else {
+            asize = 0;
+        }
     } else {
         serverPanic("Unknown object type");
     }
@@ -945,7 +951,7 @@ sds getMemoryDoctorReport(void) {
         }
 
         /* Slaves using more than 10 MB each? */
-        if (mh->clients_slaves / numslaves > (1024*1024*10)) {
+        if (numslaves > 0 && mh->clients_slaves / numslaves > (1024*1024*10)) {
             big_slave_buf = 1;
             num_reports++;
         }
@@ -955,14 +961,14 @@ sds getMemoryDoctorReport(void) {
     if (num_reports == 0) {
         s = sdsnew(
         "Hi Sam, I can't find any memory issue in your instance. "
-        "I can only account for what occurs on this base.");
+        "I can only account for what occurs on this base.\n");
     } else if (empty == 1) {
         s = sdsnew(
         "Hi Sam, this instance is empty or is using very little memory, "
         "my issues detector can't be used in these conditions. "
         "Please, leave for your mission on Earth and fill it with some data. "
         "The new Sam and I will be back to our programming as soon as I "
-        "finished rebooting.");
+        "finished rebooting.\n");
     } else {
         s = sdsnew("Sam, I detected a few issues in this Redis instance memory implants:\n\n");
         if (big_peak) {
